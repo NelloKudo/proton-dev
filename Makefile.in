@@ -141,6 +141,15 @@ include $(SRC)/make/rules-cargo.mk
 
 
 ##
+## patches
+##
+
+$(eval $(call rules-source,patches,$(SRCDIR)/patches))
+
+apply-patches = $(foreach p,$(shell find $(PATCHES_SRC)/$(1)/ -name "*.patch" 2>/dev/null | sort),patch -d $(2) -Np1 -i $(p) &&) true
+
+
+##
 ## dav1d
 ##
 
@@ -650,7 +659,8 @@ $(eval $(call rules-autoconf,wine,aarch64,unix))
 
 $(WINE_SRC)/configure: $(WINE_ORIGIN)/aclocal.m4
 
-$(OBJ)/.wine-post-source:
+$(OBJ)/.wine-post-source: patches-source
+	$(call apply-patches,wine,$(WINE_SRC))
 	cd $(WINE_SRC) && XDG_CACHE_HOME=$(OBJ) dlls/winevulkan/make_vulkan -x vk.xml -X video.xml
 	-cd $(WINE_SRC) && tools/make_specfiles
 	touch $@
@@ -1474,8 +1484,13 @@ deploy: all
 
 .PHONY: redist
 redist: all
+	rm -rf $(BUILD_NAME)
 	mkdir -p $(REDIST_DIR)
 	rsync --delete -arx $(DST_BASE)/ $(REDIST_DIR)
+	mv $(REDIST_DIR) $(BUILD_NAME)
+	XZ_OPT="-9 -T$(J)" tar -cvJf $(BUILD_NAME).tar.xz $(BUILD_NAME)
+	sha512sum $(BUILD_NAME).tar.xz > $(BUILD_NAME).sha512sum
+	@echo "Proton build available at $(BUILD_NAME).tar.xz"
 
 
 ##
@@ -1556,7 +1571,7 @@ targets:
 	$(info make                   - create a normal proton build in dist/)
 	$(info make install           - install the proton build locally in $(STEAM_DIR))
 	$(info make deploy            - create a build ready to be uploaded to steamworks in deploy/)
-	$(info make redist            - create an easily sharable proton redistributable in redist/)
+	$(info make redist            - create an easily sharable proton redistributable tarball, $$(BUILD_NAME).tar.xz)
 	$(info make module=xyz module - build the selected wine dll)
 
 
