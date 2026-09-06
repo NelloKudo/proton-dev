@@ -1,0 +1,97 @@
+name: Rebase on Valve Experimental
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebase-valve-experimental
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_URL: https://github.com/ValveSoftware/Proton.git
+  UPSTREAM_BRANCH: experimental_11.0
+  PATCH_BRANCH: valve-exp-patches
+  TARGET_BRANCH: valve-exp
+  BASE_TAG: valve-exp-base
+
+jobs:
+  rebase:
+    name: Reset valve-exp to upstream and reapply patches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout patch branch
+        uses: actions/checkout@v7
+        with:
+          ref: valve-exp-patches
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: false
+          persist-credentials: true
+          token: ${{ secrets.REBASE_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch --no-recurse-submodules --no-tags upstream "$UPSTREAM_BRANCH"
+
+      - name: Collect patches
+        id: collect
+        run: |
+          set -euo pipefail
+          old_base=$(git rev-parse --verify "refs/tags/$BASE_TAG^{commit}")
+          new_base=$(git rev-parse --verify FETCH_HEAD)
+          patches=$(git rev-list --reverse --no-merges "$old_base..HEAD")
+          if [ -z "$patches" ]; then
+            echo "no patches found between $BASE_TAG and $PATCH_BRANCH" >&2
+            exit 1
+          fi
+          echo "old base: $old_base"
+          echo "new base: $new_base"
+          echo "patches:"
+          git log --oneline --no-decorate --reverse "$old_base..HEAD"
+          if [ "$old_base" = "$new_base" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "new_base=$new_base" >> "$GITHUB_OUTPUT"
+          {
+            echo 'patches<<PATCHES_EOF'
+            echo "$patches"
+            echo 'PATCHES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Reapply patches
+        if: steps.collect.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git checkout --detach "${{ steps.collect.outputs.new_base }}"
+          while IFS= read -r commit; do
+            [ -n "$commit" ] || continue
+            git cherry-pick --allow-empty --keep-redundant-commits "$commit"
+          done <<'PATCHES_EOF'
+          ${{ steps.collect.outputs.patches }}
+          PATCHES_EOF
+          git log --oneline --no-decorate "${{ steps.collect.outputs.new_base }}..HEAD"
+
+      - name: Push result
+        if: steps.collect.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git push --force origin "HEAD:refs/heads/$TARGET_BRANCH"
+          git push --force origin "HEAD:refs/heads/$PATCH_BRANCH"
+          git push --force origin "${{ steps.collect.outputs.new_base }}:refs/tags/$BASE_TAG"
+
+      - name: Already up to date
+        if: steps.collect.outputs.changed != 'true'
+        run: echo "upstream $UPSTREAM_BRANCH unchanged, nothing to do"
