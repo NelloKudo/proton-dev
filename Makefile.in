@@ -306,6 +306,27 @@ $(eval $(call rules-meson,gst_bad,i386,unix))
 $(eval $(call rules-meson,gst_bad,x86_64,unix))
 $(eval $(call rules-meson,gst_bad,aarch64,unix))
 
+GST_UGLY_MESON_ARGS := \
+	-Dauto_features=disabled \
+	-Dnls=disabled \
+	-Dtests=disabled \
+	-Ddoc=disabled \
+	-Dasfdemux=enabled \
+	-Ddvdlpcmdec=enabled \
+	-Ddvdsub=enabled \
+	-Drealmedia=enabled \
+	-Dorc=enabled
+
+GST_UGLY_DEPENDS = gst_orc gstreamer gst_base
+GST_UGLY_HOST_DEPENDS = gst_orc
+
+$(eval $(call rules-source,gst_ugly,$(SRCDIR)/gstreamer/subprojects/gst-plugins-ugly/))
+$(eval $(call rules-meson,gst_ugly,i386,unix))
+$(eval $(call rules-meson,gst_ugly,x86_64,unix))
+$(eval $(call rules-meson,gst_ugly,aarch64,unix))
+
+default_pfx: gst_ugly
+
 ##
 ## FFmpeg
 ##
@@ -318,6 +339,81 @@ FFMPEG_CONFIGURE_ARGS := \
 	--disable-doc \
 	--disable-inline-asm \
 	--enable-demuxer=matroska \
+
+FFMPEG_CONFIGURE_ARGS += \
+	--enable-decoders \
+	--enable-muxers \
+	--enable-demuxers \
+	--enable-hwaccels \
+	--enable-parsers \
+	--enable-protocols \
+	--enable-filters \
+	--enable-bsfs \
+	--enable-zlib \
+	--enable-decoder=indeo5 \
+	--enable-decoder=adpcm_ms \
+	--enable-decoder=mpegvideo \
+	--enable-decoder=mpeg1video \
+	--enable-decoder=mp2 \
+	--enable-decoder=mpeg4 \
+	--enable-decoder=msmpeg4v1 \
+	--enable-decoder=msmpeg4v2 \
+	--enable-decoder=msmpeg4v3 \
+	--enable-decoder=vc1 \
+	--enable-decoder=vc1image \
+	--enable-decoder=wmav1 \
+	--enable-decoder=wmav2 \
+	--enable-decoder=wmapro \
+	--enable-decoder=wmalossless \
+	--enable-decoder=xma1 \
+	--enable-decoder=xma2 \
+	--enable-decoder=wmv3image \
+	--enable-decoder=wmv3 \
+	--enable-decoder=wmv2 \
+	--enable-decoder=wmv1 \
+	--enable-decoder=aac \
+	--enable-decoder=h264 \
+	--enable-decoder=hevc \
+	--enable-decoder=gif \
+	--enable-decoder=vorbis \
+	--enable-decoder=mp3 \
+	--enable-decoder=flac \
+	--enable-decoder=alac \
+	--enable-decoder=pcm* \
+	--enable-decoder=apng \
+	--enable-encoder=aac \
+	--enable-encoder=h264_vaapi \
+	--enable-encoder=hevc_vaapi \
+	--enable-demuxer=aac \
+	--enable-demuxer=gif \
+	--enable-demuxer=ogg \
+	--enable-demuxer=mov \
+	--enable-demuxer=mp3 \
+	--enable-demuxer=flac \
+	--enable-demuxer=wav \
+	--enable-demuxer=flv \
+	--enable-demuxer=apng \
+	--enable-demuxer=mpegts \
+	--enable-demuxer=asf \
+	--enable-demuxer=rtsp \
+	--enable-demuxer=xwma \
+	--enable-muxer=asf \
+	--enable-muxer=asf_stream \
+	--enable-muxer=flv \
+	--enable-muxer=mp4 \
+	--enable-muxer=dash \
+	--enable-muxer=webm \
+	--enable-muxer=mpegts \
+	--enable-parser=mpeg4video \
+	--enable-parser=h264 \
+	--enable-parser=hevc \
+	--enable-parser=vc1 \
+	--enable-parser=mpegaudio \
+	--enable-filter=scale \
+	--enable-protocol=file \
+	--enable-protocol=rtp \
+	--enable-protocol=rtmp \
+	--enable-protocol=rtsp \
 
 FFMPEG_i386-unix_CONFIGURE_ARGS := \
 	--cross-prefix=i686-linux-gnu- \
@@ -338,14 +434,6 @@ $(eval $(call rules-source,ffmpeg,$(SRCDIR)/ffmpeg))
 $(eval $(call rules-configure,ffmpeg,i386,unix))
 $(eval $(call rules-configure,ffmpeg,x86_64,unix))
 $(eval $(call rules-configure,ffmpeg,aarch64,unix))
-
-## Only use ffmpeg to build gst-libav; we don't ship it.
-$(OBJ)/.ffmpeg-i386-dist:
-	touch $@
-$(OBJ)/.ffmpeg-x86_64-dist:
-	touch $@
-$(OBJ)/.ffmpeg-aarch64-dist:
-	touch $@
 
 ##
 ## gst-libav
