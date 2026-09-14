@@ -1,0 +1,105 @@
+From a0f32a8faaca7f47aebd35e8c766478c3e1f5903 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 20 Sep 2023 09:49:29 +0200
+Subject: [PATCH 04/17] makedep: Allow modules to have a different 64bit name.
+
+CW-Bug-Id: #22729
+(cherry picked from commit 933b89503690e973bc16f7c58db56b549324990b)
+---
+ tools/makedep.c | 32 ++++++++++++++++++++++----------
+ 1 file changed, 22 insertions(+), 10 deletions(-)
+
+diff --git a/tools/makedep.c b/tools/makedep.c
+index 36b9207f601..a15e0e98b41 100644
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -3914,12 +3914,14 @@ static const struct
+ static void output_fake_module( struct makefile *make, const char *spec_file )
+ {
+     unsigned int arch = 0;  /* fake modules are always native */
+-    const char *name = strmake( "%s/%s", arch_pe_dirs[arch], make->module );
++    const char *name, *module;
+ 
+     if (make->disabled[arch]) return;
++    if (!(module = get_expanded_make_variable( make, strmake( "%s_%s", archs.str[arch], "MODULE" ) ))) module = make->module;
+ 
++    name = strmake( "%s%s", arch_pe_dirs[arch], module );
+     strarray_add( &make->all_targets[arch], name );
+-    install_data_file( make, make->module, name, strmake( "$(libdir)/wine/%s", arch_pe_dirs[arch] ), NULL );
++    install_data_file( make, module, name, strmake( "$(libdir)/wine/%s", arch_pe_dirs[arch] ), NULL );
+ 
+     output( "%s:", obj_dir_path( make, name ));
+     if (spec_file) output_filename( spec_file );
+@@ -3946,27 +3948,28 @@ static void output_module( struct makefile *make, unsigned int arch )
+     struct strarray all_libs = empty_strarray;
+     struct strarray dep_libs = empty_strarray;
+     struct strarray imports = make->imports;
+-    const char *p, *module_name;
++    const char *p, *module_name, *module;
+     char *spec_file = NULL;
+     unsigned int link_arch;
+ 
++    if (!(module = get_expanded_arch_var( make, "MODULE", arch ))) module = make->module;
+     if (!make->is_exe)
+     {
+-        if (make->data_only || strendswith( make->module, ".drv" ) ||
++        if (make->data_only || strendswith( module, ".drv" ) ||
+             strarray_exists( make->extradllflags, "-Wl,--subsystem,native" ))
+         {
+             /* spec file is optional */
+-            struct incl_file *spec = find_src_file( make, replace_extension( make->module, ".dll", ".spec" ));
++            struct incl_file *spec = find_src_file( make, replace_extension( module, ".dll", ".spec" ));
+             if (spec) spec_file = spec->filename;
+         }
+-        else spec_file = src_dir_path( make, replace_extension( make->module, ".dll", ".spec" ));
++        else spec_file = src_dir_path( make, replace_extension( module, ".dll", ".spec" ));
+     }
+ 
+     if (!make->data_only)
+     {
+         if (!get_link_arch( make, arch, &link_arch )) return;
+ 
+-        module_name = arch_module_name( make->module, arch );
++        module_name = arch_module_name( module, arch );
+         default_imports = get_default_imports( make, imports,
+                                                strarray_exists( make->extradllflags, "-nodefaultlibs" ));
+ 
+@@ -3983,7 +3986,7 @@ static void output_module( struct makefile *make, unsigned int arch )
+                 if (import) strarray_add( &all_libs, strmake( "%s%s", delay_load_flags[arch], import->module ));
+             }
+         }
+-        if (!make->disabled[link_arch]) install_program( make, make->module, arch,
++        if (!make->disabled[link_arch]) install_program( make, module, arch,
+                                                          module_name, arch_install_dirs[arch] );
+     }
+     else
+@@ -3992,8 +3995,8 @@ static void output_module( struct makefile *make, unsigned int arch )
+         if (make->disabled[arch]) return;
+         link_arch = arch;
+ 
+-        module_name = strmake( "%s/%s", arch_pe_dirs[arch], make->module );
+-        install_data_file( make, make->module, module_name,
++        module_name = strmake( "%s/%s", arch_pe_dirs[arch], module );
++        install_data_file( make, module, module_name,
+                            strmake( "$(libdir)/wine/%s", arch_pe_dirs[arch] ), NULL );
+     }
+ 
+@@ -4958,6 +4961,15 @@ static void load_sources( struct makefile *make )
+         if (make->importlib) strarray_add( &make->install[INSTALL_DEV], make->importlib );
+         if (make->staticlib) strarray_add( &make->install[INSTALL_DEV], make->staticlib );
+         else if (make->module) strarray_add( &make->install[INSTALL_LIB], make->module );
++        if (make->module)
++        {
++            for (arch = 1; arch < archs.count; arch++)
++            {
++                char *module;
++                if (!(module = get_expanded_arch_var( make, "MODULE", arch ))) continue;
++                strarray_add( &make->install[INSTALL_LIB], module );
++            }
++        }
+     }
+ 
+     make->include_paths = empty_strarray;
+-- 
+2.55.0
+

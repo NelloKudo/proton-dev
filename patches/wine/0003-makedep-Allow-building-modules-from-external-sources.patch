@@ -1,0 +1,99 @@
+From 4402f748934ec785a1429a118b1b0155c8c71fef Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 20 Sep 2023 00:03:48 +0200
+Subject: [PATCH 03/17] makedep: Allow building modules from external sources.
+
+CW-Bug-Id: #22729
+(cherry picked from commit c30909127744a2a8a9da254566810689e443bcfb)
+---
+ tools/makedep.c | 25 ++++++++++++++++++++++---
+ 1 file changed, 22 insertions(+), 3 deletions(-)
+
+diff --git a/tools/makedep.c b/tools/makedep.c
+index f7d010ac33f..36b9207f601 100644
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -221,6 +221,7 @@ struct makefile
+     bool            external;
+     bool            is_win16;
+     bool            is_exe;
++    bool            is_external;
+     bool            disabled[MAX_ARCHS];
+ 
+     /* values generated at output time */
+@@ -1713,6 +1714,7 @@ static struct file *open_include_file( const struct makefile *make, struct incl_
+     /* ignore missing files in external libs */
+     if (make->external) return NULL;
+     if (source->included_by && is_external_header( source->included_by )) return NULL;
++    if (make->is_external) return NULL;
+ 
+     fprintf( stderr, "%s:%d: error: ", source->included_by->file->name, source->included_line );
+     perror( source->name );
+@@ -2374,7 +2376,7 @@ static struct strarray add_unix_libraries( const struct makefile *make, struct s
+     struct strarray ret = empty_strarray;
+     struct strarray all_libs = empty_strarray;
+ 
+-    if (strcmp( make->unixlib, "ntdll.so" )) strarray_add( &all_libs, "-lntdll" );
++    if (strcmp( make->unixlib, "ntdll.so" ) && !make->is_external) strarray_add( &all_libs, "-lntdll" );
+     strarray_addall( &all_libs, get_expanded_make_var_array( make, "UNIX_LIBS" ));
+ 
+     STRARRAY_FOR_EACH( file, &all_libs )
+@@ -2531,6 +2533,11 @@ static struct strarray add_import_libs( const struct makefile *make, struct stra
+             continue;
+         }
+         if (submake) continue;  /* ignore disabled lib */
++        if (make->is_external)  /* link external modules against the installed import libs */
++        {
++            strarray_add( &ret, strmake( "-l%s", basename ));
++            continue;
++        }
+         input_file_name = src_dir_path( make, "Makefile.in" );
+         fatal_error( "library %s not found\n", basename );
+ 
+@@ -4821,6 +4828,8 @@ static void output_top_makefile( struct makefile *make )
+     output( ".PRECIOUS: Makefile\n" );
+     output( ".MAKEFILEDEPS:\n" );
+     output( ".SUFFIXES:\n" );
++    if (root_obj_dir) goto done;
++
+     output( "Makefile: config.status %s\n", makedep );
+     output( "\t@./config.status Makefile\n" );
+     output( "config.status: %s\n", root_src_dir_path( "configure" ));
+@@ -4865,6 +4874,7 @@ static void output_top_makefile( struct makefile *make )
+         strarray_add( &make->maintainerclean_files, "include/config.h.in" );
+     }
+ 
++done:
+     for (i = 0; i < subdirs.count; i++) output_sources( submakes[i] );
+     output_sources( make );
+ 
+@@ -5068,7 +5078,7 @@ static unsigned int find_pe_arch( const char *arch )
+ int main( int argc, char *argv[] )
+ {
+     const char *makeflags = getenv( "MAKEFLAGS" );
+-    const char *target;
++    const char *target, *tmp;
+     unsigned int i, j, arch, ec_arch;
+ 
+     if (makeflags) parse_makeflags( makeflags );
+@@ -5203,7 +5213,16 @@ int main( int argc, char *argv[] )
+     subdirs = get_expanded_make_var_array( top_makefile, "SUBDIRS" );
+     submakes = xmalloc( subdirs.count * sizeof(*submakes) );
+ 
+-    for (i = 0; i < subdirs.count; i++) submakes[i] = parse_makefile( subdirs.str[i] );
++    for (i = 0; i < subdirs.count; i++)
++    {
++        submakes[i] = parse_makefile( subdirs.str[i] );
++        if (*(tmp = subdirs.str[i]) == '/')
++        {
++            tmp = strmake( "dlls%s", strrchr( tmp, '/' ) );
++            submakes[i]->is_external = 1;
++        }
++        submakes[i]->obj_dir = subdirs.str[i] = tmp;
++    }
+ 
+     if (!include_makefile) include_makefile = parse_makefile( root_src_dir_path( "include" ) );
+ 
+-- 
+2.55.0
+

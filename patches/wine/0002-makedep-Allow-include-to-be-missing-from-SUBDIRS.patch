@@ -1,0 +1,39 @@
+From d39e7b853b368610629803403849a81f77c1f4d1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 26 Sep 2023 16:34:50 +0200
+Subject: [PATCH 02/17] makedep: Allow include to be missing from SUBDIRS.
+
+CW-Bug-Id: #22729
+(cherry picked from commit 243b4b89e5dd17af9f5c7c7e5db2d3f74a78fd98)
+---
+ tools/makedep.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/tools/makedep.c b/tools/makedep.c
+index a7b85faf5be..f7d010ac33f 100644
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -1663,9 +1663,9 @@ static struct file *open_include_file( const struct makefile *make, struct incl_
+     if ((file = open_local_explicit_file( make, source ))) return file;
+ 
+     /* check for global importlib (module dependency) */
+-    if (source->type == INCL_IMPORTLIB && find_importlib_module( source->name ))
++    if (source->type == INCL_IMPORTLIB)
+     {
+-        source->filename = source->name;
++        if (find_importlib_module( source->name )) source->filename = source->name;
+         return NULL;
+     }
+ 
+@@ -5205,6 +5205,8 @@ int main( int argc, char *argv[] )
+ 
+     for (i = 0; i < subdirs.count; i++) submakes[i] = parse_makefile( subdirs.str[i] );
+ 
++    if (!include_makefile) include_makefile = parse_makefile( root_src_dir_path( "include" ) );
++
+     load_sources( top_makefile );
+     load_sources( include_makefile );
+     for (i = 0; i < subdirs.count; i++)
+-- 
+2.55.0
+
