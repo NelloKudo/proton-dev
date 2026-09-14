@@ -1,0 +1,107 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Thu, 8 Jan 2026 20:46:19 -0600
+Subject: [PATCH] loader: HACK: Build wine64 and wine64-preloader.
+
+And run wine64-preloader for _AMD64.
+
+CW-Bug-Id: #26438
+---
+diff --git a/configure.ac b/configure.ac
+--- a/configure.ac
++++ b/configure.ac
+@@ -2413,6 +2413,13 @@
+ enable_icucommon=${enable_icucommon:-$enable_cplusplus}
+ enable_icui18n=${enable_icui18n:-$enable_cplusplus}
+ 
++if test "$host_cpu" = "x86_64"
++then
++    enable_loader64=${enable_loader64:-yes}
++else
++    enable_loader64=${enable_loader64:-no}
++fi
++
+ dnl Disable some programs for other PE archs
+ enable_conhost=${enable_conhost:-$HOST_ARCH}
+ enable_lsass=${enable_lsass:-$HOST_ARCH}
+@@ -3569,6 +3576,7 @@
+ WINE_CONFIG_MAKEFILE(libs/xslt)
+ WINE_CONFIG_MAKEFILE(libs/zlib)
+ WINE_CONFIG_MAKEFILE(loader)
++WINE_CONFIG_MAKEFILE(loader64)
+ WINE_CONFIG_MAKEFILE(nls)
+ WINE_CONFIG_MAKEFILE(po)
+ WINE_CONFIG_MAKEFILE(programs/arp)
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -435,10 +435,16 @@
+ }
+ 
+ 
+-static void preloader_exec( char **argv )
++static void preloader_exec( char **argv, WORD machine )
+ {
+ #ifdef HAVE_WINE_PRELOADER
+-    asprintf( &argv[0], "%s-preloader", argv[1] );
++#if !defined(__arm__) && !defined(__aarch64__)
++    if (machine == IMAGE_FILE_MACHINE_AMD64)
++        asprintf( &argv[0], "%s64-preloader", argv[1] );
++    else
++#endif
++        asprintf( &argv[0], "%s-preloader", argv[1] );
++
+ #ifdef __APPLE__
+     {
+         posix_spawnattr_t attr;
+@@ -461,10 +467,10 @@
+ 
+     putenv( noexec );
+ 
+-    if (((argv[1] = get_alternate_wineloader( machine )))) preloader_exec( argv );
++    if (((argv[1] = get_alternate_wineloader( machine )))) preloader_exec( argv, machine );
+ 
+     argv[1] = strdup( wineloader );
+-    preloader_exec( argv );
++    preloader_exec( argv, machine );
+     return STATUS_INVALID_IMAGE_FORMAT;
+ }
+ 
+diff --git a/tools/makedep.c b/tools/makedep.c
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -4260,7 +4260,7 @@
+         }
+         strarray_addall( &make->all_targets[arch], symlinks );
+ 
+-        install_dir = !strcmp( make->obj_dir, "loader" ) ? arch_install_dirs[arch] : "$(bindir)";
++        install_dir = !strcmp( make->obj_dir, "loader" ) || !strcmp( make->obj_dir, "loader64" ) ? arch_install_dirs[arch] : "$(bindir)";
+         install_program( make, name, arch, program, install_dir );
+         STRARRAY_FOR_EACH( link, &symlinks )
+             install_program_symlink( make, link, obj_dir_path( make, program ),
+diff --git a/loader64/Makefile.in b/loader64/Makefile.in
+new file mode 100644
+--- /dev/null
++++ b/loader64/Makefile.in
+@@ -0,0 +1,20 @@
++PARENTSRC = ../loader
++
++SOURCES = \
++    main.c \
++    preloader.c \
++    preloader_mac.c
++
++PROGRAMS = wine64 wine64-preloader
++INSTALL_LIB = wine64 wine64-preloader
++UNIX_CFLAGS = -fPIE
++
++preloader_EXTRADEFS = -fno-builtin
++
++wine64_OBJS = main.o
++wine64_DEPS = $(WINELOADER_DEPENDS)
++wine64_LDFLAGS = $(WINELOADER_LDFLAGS) $(LDEXECFLAGS) $(PTHREAD_LIBS)
++
++wine64_preloader_OBJS = preloader.o
++wine64_preloader_DEPS = $(WINELOADER_DEPENDS)
++wine64_preloader_LDFLAGS = $(WINEPRELOADER_LDFLAGS)
+-- 
