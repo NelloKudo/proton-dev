@@ -522,40 +522,6 @@ $(eval $(call rules-makedep,lsteamclient,aarch64))
 
 
 ##
-## openxr
-## Note 32-bit is not supported by SteamVR, so we don't build it.
-##
-
-OPENXR_CMAKE_ARGS = -DHAVE_FILESYSTEM_WITHOUT_LIB=0
-
-$(eval $(call rules-source,openxr,$(SRCDIR)/OpenXR-SDK))
-# $(eval $(call rules-cmake,openxr,i386,unix))
-$(eval $(call rules-cmake,openxr,x86_64,unix))
-$(eval $(call rules-cmake,openxr,aarch64,unix))
-
-
-##
-## wineopenxr
-## Note 32-bit is not supported by SteamVR, so we don't build it.
-##
-
-WINEOPENXR_LDFLAGS = -lopenxr_loader
-WINEOPENXR_DEPENDS = wine openxr
-
-WINEOPENXR_aarch64_PE_ARCHS = arm64ec x86_64
-
-$(eval $(call rules-source,wineopenxr,$(SRCDIR)/wineopenxr))
-$(eval $(call rules-makedep,wineopenxr,x86_64))
-$(eval $(call rules-makedep,wineopenxr,aarch64))
-
-WINEOPENXR64_JSON := $(DST_DIR)/share/openxr/wineopenxr64.json
-$(WINEOPENXR_SRC)/wineopenxr64.json: wineopenxr
-$(WINEOPENXR64_JSON): $(WINEOPENXR_SRC)/wineopenxr64.json
-	mkdir -p $(dir $@)
-	cp -a $< $@
-
-
-##
 ## steam.exe
 ##
 
@@ -694,14 +660,6 @@ WINE_SOURCE_ARGS = \
   --exclude autom4te.cache \
   --exclude include/config.h.in \
   --exclude include/config.h.ink \
-  --exclude include/wine/vulkan.h \
-  --exclude dlls/vulkan-1/vulkan-1.spec \
-  --exclude dlls/winevulkan/loader_thunks.c \
-  --exclude dlls/winevulkan/loader_thunks.h \
-  --exclude dlls/winevulkan/vulkan_thunks.c \
-  --exclude dlls/winevulkan/vulkan_thunks.h \
-  --exclude dlls/winevulkan/winevulkan.json \
-  --exclude dlls/winevulkan/winevulkan.spec \
   --exclude dlls/ntdll/ntsyscalls.h \
   --exclude dlls/win32u/win32syscalls.h \
   --exclude include/wine/server_protocol.h \
@@ -749,7 +707,6 @@ $(WINE_SRC)/configure: $(WINE_ORIGIN)/aclocal.m4
 
 $(OBJ)/.wine-post-source: patches-source
 	$(call apply-patches,wine,$(WINE_SRC))
-	cd $(WINE_SRC) && XDG_CACHE_HOME=$(OBJ) dlls/winevulkan/make_vulkan -x vk.xml -X video.xml
 	-cd $(WINE_SRC) && tools/make_specfiles
 	touch $@
 
@@ -776,18 +733,6 @@ ifeq ($(findstring x86_64,$(unix_ARCHS)),)
 	cp -a $(WINE_aarch64_DST)/share/wine $(DST_DIR)/share
 endif
 	touch $@
-
-##
-## vrclient
-##
-
-VRCLIENT_DEPENDS = vulkan-headers wine
-
-$(eval $(call rules-source,vrclient,$(SRCDIR)/vrclient_x64))
-$(eval $(call rules-makedep,vrclient,i386))
-$(eval $(call rules-makedep,vrclient,x86_64))
-$(eval $(call rules-makedep,vrclient,aarch64))
-
 
 ##
 ## dxvk
@@ -1487,7 +1432,7 @@ endif
 ## default_pfx
 ##
 
-default_pfx: wine gst_good gst_bad gst_libav gst_plugins_rs lsteamclient steamexe vrclient wineopenxr $(WINEOPENXR64_JSON) dxvk dxvk-nvapi dxvk-igdext vkd3d-proton
+default_pfx: wine gst_good gst_bad gst_libav gst_plugins_rs lsteamclient steamexe dxvk dxvk-nvapi dxvk-igdext vkd3d-proton
 	find $(DST_LIBDIR)/wine -type f -execdir chmod a-w '{}' '+'
 	rm -rf $(abspath $(DIST_PREFIX))
 	rm -rf $(abspath $(DIST_PREFIX_ARM64))
