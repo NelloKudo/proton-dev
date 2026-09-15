@@ -181,28 +181,6 @@ size_t strappend( char **buf, size_t *buf_size, size_t pos, const char *fmt, ...
     return n;
 }
 
-static void setup_vr_registry(void)
-{
-    BOOL (CDECL *init)(void);
-    HMODULE vrclient;
-
-#ifdef _WIN64
-    if (!(vrclient = LoadLibraryW( L"vrclient_x64" )))
-#else
-    if (!(vrclient = LoadLibraryW( L"vrclient" )))
-#endif
-    {
-        ERR( "Failed to load vrclient module, skipping initialization\n" );
-        return;
-    }
-
-    if ((init = (void *)GetProcAddress( vrclient, "vrclient_init_registry" ))) init();
-    else ERR( "Failed to find vrclient_init_registry export\n" );
-
-    TRACE( "Queued VR info initialization.\n" );
-    FreeLibrary(vrclient);
-}
-
 static void setup_steam_registry(void)
 {
     BOOL (CDECL *init)(void);
@@ -982,9 +960,6 @@ int main(int argc, char *argv[])
     if (argc > 1)
     {
         BOOL should_await;
-
-        if (game_process)
-            setup_vr_registry();
 
         child = run_process(&should_await, game_process);
 
